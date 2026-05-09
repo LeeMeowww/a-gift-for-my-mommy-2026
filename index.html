@@ -90,6 +90,9 @@
             0% { opacity: 1; }
             100% { opacity: 0; display: none; }
         }
+
+        /* 轮播图渐变动画 */
+        .fade-img { transition: opacity 0.5s ease-in-out; }
     </style>
 </head>
 <body class="h-screen w-screen flex items-center justify-center p-2 sm:p-4">
@@ -182,7 +185,11 @@
         <div id="letter-screen" class="absolute inset-0 bg-pink-50 text-gray-800 z-50 flex flex-col p-6 hidden overflow-y-auto rounded-xl border-4 border-pink-300">
             <h2 class="text-2xl font-bold text-pink-600 mb-4 text-center">致最爱的妈咪</h2>
             
-            <img src="our-family.jpg" alt="我们的合照❤️" class="w-full h-48 object-cover rounded-lg mb-4 shadow-sm border-2 border-pink-300">
+            <!-- 信件专属照片轮播 (固定4:3比例) -->
+            <div class="w-full aspect-[4/3] bg-pink-100 rounded-lg mb-4 shadow-sm border-2 border-pink-300 relative overflow-hidden flex-none">
+                <img id="letter-carousel-img" src="" class="w-full h-full object-cover fade-img" alt="信件回忆相册">
+                <div class="absolute bottom-2 right-2 text-xs text-white bg-black/40 px-2 py-1 rounded-full backdrop-blur-sm">💖 Our memory</div>
+            </div>
             
             <div class="text-sm leading-relaxed text-gray-700 font-serif mb-6 flex-1">
                 <p class="mb-2 font-bold text-lg text-pink-500">亲爱的妈妈：</p>
@@ -394,12 +401,50 @@
             UI.achievementsScreen.classList.add('hidden');
         }
 
+        // [新增] 信件界面的12张轮播照片数组 (请替换为这12张真实照片的路径/文件名)
+        const letterImages = [
+            '/photo/img1.jpg', '/photo/img2.jpg', '/photo/img3.jpg', '/photo/img4.jpg',
+            '/photo/img5.jpg', '/photo/img6.jpg', '/photo/img7.jpg', '/photo/img8.jpg',
+            '/photo/img9.jpg', '/photo/img10.jpg', '/photo/img11.jpg', '/photo/img12.jpg'
+        ];
+        let letterCarouselIdx = 0;
+        let letterCarouselInterval = null;
+
+        // [替换] 修改原有的 showLetter 函数
         function showLetter() {
             UI.letterScreen.classList.remove('hidden');
+            // renderMessages(); // 打开信件时刷新留言
+            
+            // 启动信件照片轮播
+            const imgEl = document.getElementById('letter-carousel-img');
+            if (imgEl && letterImages.length > 0) {
+                // 初始化第一张图
+                imgEl.src = letterImages[letterCarouselIdx];
+                imgEl.style.opacity = 1;
+                
+                // 清除可能存在的旧定时器，防止加速Bug
+                if (letterCarouselInterval) clearInterval(letterCarouselInterval);
+                
+                letterCarouselInterval = setInterval(() => {
+                    imgEl.style.opacity = 0; // 触发淡出
+                    setTimeout(() => {
+                        // 切换图片索引
+                        letterCarouselIdx = (letterCarouselIdx + 1) % letterImages.length;
+                        imgEl.src = letterImages[letterCarouselIdx];
+                        imgEl.style.opacity = 1; // 触发淡入
+                    }, 500); // 500ms 对应 css 的 .fade-img 动画时长
+                }, 3500); // 每3.5秒切换一次图片
+            }
         }
 
+        // [替换] 修改原有的 closeLetter 函数
         function closeLetter() {
             UI.letterScreen.classList.add('hidden');
+            // 关闭信件界面时，清除轮播定时器以节省手机性能
+            if (letterCarouselInterval) {
+                clearInterval(letterCarouselInterval);
+                letterCarouselInterval = null;
+            }
         }
 
         // 页面加载时初始化
