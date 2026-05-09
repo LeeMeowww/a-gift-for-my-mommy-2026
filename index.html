@@ -258,20 +258,26 @@
             love: 0,
             day: 0,
             maxDays: 20,
-            relics: [] // [{id: 'thermos', name: '保温杯', emoji: '🍵', desc: '每天恢复体力'}]
+            relics: [], // [{id: 'thermos', name: '保温杯', emoji: '🍵', desc: '每天恢复体力'}]
+            eventCounts: {}, // [新增] 记录普通事件出现次数
+            treasureCount: 0 // [新增] 记录宝箱出现次数
         };
 
         // --- 本地存储与成就系统数据 ---
         let localData = JSON.parse(localStorage.getItem('mom_rpg_data')) || {
             achievements: [],
-            hasCleared: false
+            hasCleared: false,
+            playCount: 0,    // [新增] 游玩总次数
+            messages: []     // [新增] 留言与表情记录
         };
 
         const achievementDb = [
             { id: 'first_win', name: '初级勇者', desc: '首次通关游戏！', emoji: '👑' },
             { id: 'love_master', name: '爱意满满', desc: '单局收集超过150点爱心', emoji: '💖' },
             { id: 'relic_hunter', name: '善假于物也', desc: '单局收集3个以上生活小帮手', emoji: '🎒' },
-            { id: 'tough_mom', name: '极限边缘', desc: '体力或心情跌至30以下且存活', emoji: '⚠️' }
+            { id: 'tough_mom', name: '极限边缘', desc: '体力或心情跌至30以下且存活', emoji: '⚠️' },
+            { id: 'play_5_times', name: '资深冒险家', desc: '累计游玩冒险超过5次', emoji: '🎮' }, // [新增]
+            { id: 'leave_message', name: '爱的回响', desc: '在信件中留下留言或贴表情', emoji: '💬' } // [新增]
         ];
 
         function saveLocalData() {
@@ -496,7 +502,7 @@
             renderMessages();
             
             // 触发留言成就
-            // unlockAchievement('leave_message');
+            unlockAchievement('leave_message');
         }
 
         // [替换] 修改原有的 showLetter 函数
@@ -616,10 +622,23 @@
 
             // 决定生成什么事件 (每5天必定是宝箱事件)
             let currentEvent;
-            if (state.day % 5 === 0) {
+            // 宝箱事件限制全局最多4次
+            if (state.day % 5 === 0 && state.treasureCount < 4) {
                 currentEvent = generateTreasure();
+                state.treasureCount++;
             } else {
-                currentEvent = events[Math.floor(Math.random() * events.length)];
+                // 筛选出本局出现次数少于3次的普通事件
+                let availableEvents = events.filter(e => (state.eventCounts[e.title] || 0) < 3);
+                
+                // 防御机制：如果所有事件都被抽满了3次，则临时放宽限制
+                if(availableEvents.length === 0) {
+                    availableEvents = events; 
+                }
+
+                currentEvent = availableEvents[Math.floor(Math.random() * availableEvents.length)];
+                
+                // 增加该事件的触发计数
+                state.eventCounts[currentEvent.title] = (state.eventCounts[currentEvent.title] || 0) + 1;
             }
 
             renderEvent(currentEvent);
@@ -770,8 +789,8 @@
             UI.endTitle.className = "text-3xl font-bold text-yellow-400 mb-4 text-center drop-shadow-md";
             
             let evaluation = "";
-            if(state.love > 200) evaluation = "【传说级通关】您的爱已经溢出屏幕了！";
-            else if(state.love > 150) evaluation = "【史诗级通关】兼顾了身心健康和家庭，太强了！";
+            if(state.love > 150) evaluation = "【传说级通关】您的爱已经溢出屏幕了！";
+            else if(state.love > 100) evaluation = "【史诗级通关】兼顾了身心健康和家庭，太强了！";
             else evaluation = "【优秀通关】平平淡淡才是真，平安就好。";
 
             UI.endDesc.innerHTML = `
