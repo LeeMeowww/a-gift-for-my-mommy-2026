@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>勇者妈妈的奇幻冒险</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #2c3e50; /* 模拟RPG的深色背景 */
+            color: #ecf0f1;
+            overflow: hidden;
+            touch-action: none;
+            user-select: none;
+        }
+
+        /* 像素风或复古风边框 */
+        .rpg-box {
+            background-color: #34495e;
+            border: 4px solid #95a5a6;
+            border-radius: 12px;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+        }
+
+        /* 按钮按压效果 */
+        .rpg-btn {
+            background: linear-gradient(to bottom, #3498db, #2980b9);
+            border: 2px solid #ecf0f1;
+            border-radius: 8px;
+            color: white;
+            transition: all 0.1s;
+        }
+        .rpg-btn:active {
+            transform: translateY(4px);
+            background: #2980b9;
+        }
+
+        /* 状态条动画 */
+        .bar-fill {
+            transition: width 0.3s ease-out;
+        }
+
+        /* 飘字动画 (伤害/恢复) */
+        .float-text {
+            position: absolute;
+            font-weight: bold;
+            font-size: 1.2rem;
+            pointer-events: none;
+            animation: floatUp 1s ease-out forwards;
+            text-shadow: 1px 1px 2px black;
+            z-index: 50;
+        }
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translateY(0) scale(1); }
+            100% { opacity: 0; transform: translateY(-40px) scale(1.2); }
+        }
+
+        /* 震动特效 (受到伤害时) */
+        .shake {
+            animation: shakeAnim 0.3s;
+        }
+        @keyframes shakeAnim {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            20% { transform: translate(-3px, 0px) rotate(-1deg); }
+            40% { transform: translate(1px, -1px) rotate(1deg); }
+            60% { transform: translate(-1px, 2px) rotate(0deg); }
+            80% { transform: translate(-1px, -1px) rotate(1deg); }
+            100% { transform: translate(1px, 1px) rotate(0deg); }
+        }
+
+        /* 怪物进场动画 */
+        .event-enter {
+            animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @keyframes popIn {
+            0% { transform: scale(0); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* 成就弹窗提示动画 */
+        .toast-enter {
+            animation: slideDown 0.5s forwards, fadeOut 0.5s 2.5s forwards;
+        }
+        @keyframes slideDown {
+            0% { transform: translateY(-100%); opacity: 0; }
+            100% { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes fadeOut {
+            0% { opacity: 1; }
+            100% { opacity: 0; display: none; }
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex items-center justify-center p-2 sm:p-4">
+
+    <!-- 游戏主容器 -->
+    <div id="game-container" class="w-full max-w-md h-full max-h-[800px] rpg-box flex flex-col relative overflow-hidden bg-gray-800">
+        
+        <!-- 顶部状态栏 -->
+        <div class="p-3 border-b-4 border-gray-600 bg-gray-900 flex flex-col gap-2 z-10">
+            <div class="flex justify-between items-center text-sm sm:text-base font-bold">
+                <span class="text-yellow-400">👑 勇者妈妈</span>
+                <span class="text-blue-300">天数: <span id="ui-day">1</span>/20</span>
+                <span class="text-pink-400">💖 爱心: <span id="ui-love">0</span></span>
+            </div>
+            
+            <!-- 血量 (体力) -->
+            <div class="flex items-center gap-2">
+                <span class="text-red-400 w-12 text-sm font-bold">体力</span>
+                <div class="flex-1 bg-gray-700 h-4 rounded-full overflow-hidden border border-gray-500">
+                    <div id="ui-hp-bar" class="bg-red-500 h-full bar-fill" style="width: 100%;"></div>
+                </div>
+                <span id="ui-hp-text" class="text-xs w-8 text-right">100</span>
+            </div>
+            
+            <!-- 蓝量 (心情) -->
+            <div class="flex items-center gap-2">
+                <span class="text-blue-400 w-12 text-sm font-bold">心情</span>
+                <div class="flex-1 bg-gray-700 h-4 rounded-full overflow-hidden border border-gray-500">
+                    <div id="ui-joy-bar" class="bg-blue-500 h-full bar-fill" style="width: 100%;"></div>
+                </div>
+                <span id="ui-joy-text" class="text-xs w-8 text-right">100</span>
+            </div>
+
+            <!-- 神器栏 (Relics) -->
+            <div class="flex gap-2 mt-1 h-8 items-center" id="ui-relics">
+                <span class="text-xs text-gray-400">持有神器:</span>
+                <!-- 动态添加神器emoji -->
+            </div>
+        </div>
+
+        <!-- 游戏主画面 (事件展示区) -->
+        <div id="main-screen" class="flex-1 p-4 flex flex-col items-center justify-center relative">
+            <div id="event-emoji" class="text-8xl mb-6 drop-shadow-lg event-enter">🏰</div>
+            <h2 id="event-title" class="text-2xl font-bold text-center mb-2 text-yellow-300">冒险开始</h2>
+            <p id="event-desc" class="text-center text-gray-300 text-sm sm:text-base leading-relaxed px-4">
+                欢迎来到日常冒险世界！你的任务是平安度过20天，收集爱心，并保持身心健康。
+            </p>
+        </div>
+
+        <!-- 底部操作区 (选择面板) -->
+        <div class="p-4 border-t-4 border-gray-600 bg-gray-700 min-h-[200px] flex flex-col justify-end">
+            <div id="action-buttons" class="flex flex-col gap-3">
+                <button onclick="startGame()" class="rpg-btn py-3 px-4 font-bold text-lg w-full">开始冒险</button>
+            </div>
+        </div>
+
+        <!-- 遮罩层 (结算/结束/胜利) -->
+        <div id="overlay" class="absolute inset-0 bg-black/90 z-50 flex flex-col items-center justify-center p-6 hidden">
+            <div id="end-emoji" class="text-6xl mb-4">💐</div>
+            <h1 id="end-title" class="text-3xl font-bold text-pink-400 mb-4 text-center">通关啦！</h1>
+            <div id="end-desc" class="text-gray-200 text-lg leading-relaxed text-center mb-8">
+                内容加载中...
+            </div>
+            <button onclick="location.reload()" class="rpg-btn py-3 px-8 font-bold text-lg rounded-full">再玩一次</button>
+        </div>
+
+        <!-- 游戏主菜单 (Start Screen) -->
+        <div id="start-screen" class="absolute inset-0 bg-gray-800 z-50 flex flex-col items-center justify-center p-6">
+            <div class="text-8xl mb-4 drop-shadow-lg">👑</div>
+            <h1 class="text-4xl font-bold text-yellow-400 mb-8 text-center drop-shadow-md">勇者妈妈的<br>奇幻冒险</h1>
+            <div class="flex flex-col gap-4 w-full max-w-xs">
+                <button onclick="startGame()" class="rpg-btn py-3 px-4 font-bold text-lg w-full">开始冒险</button>
+                <button onclick="showAchievements()" class="rpg-btn py-3 px-4 font-bold text-lg w-full" style="background: linear-gradient(to bottom, #9b59b6, #8e44ad);">🏆 成就系统</button>
+                <button id="btn-letter" onclick="showLetter()" class="rpg-btn py-3 px-4 font-bold text-lg w-full hidden border-pink-300" style="background: linear-gradient(to bottom, #e84393, #d63031);">💌 给妈妈的信</button>
+            </div>
+        </div>
+
+        <!-- 成就系统界面 -->
+        <div id="achievements-screen" class="absolute inset-0 bg-gray-900 z-50 flex flex-col p-4 hidden">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold text-yellow-400">🏆 成就系统</h2>
+                <button onclick="closeAchievements()" class="text-gray-400 text-3xl font-bold">&times;</button>
+            </div>
+            <div id="achievements-list" class="flex-1 overflow-y-auto flex flex-col gap-3 pb-4">
+                <!-- 成就列表动态生成 -->
+            </div>
+        </div>
+
+        <!-- 给妈妈的信界面 -->
+        <div id="letter-screen" class="absolute inset-0 bg-pink-50 text-gray-800 z-50 flex flex-col p-6 hidden overflow-y-auto rounded-xl border-4 border-pink-300">
+            <h2 class="text-2xl font-bold text-pink-600 mb-4 text-center">致最爱的妈妈</h2>
+            
+            <!-- 图片占位符 -->
+            <div class="w-full h-48 bg-pink-100 rounded-lg flex items-center justify-center mb-4 border-2 border-dashed border-pink-400 shadow-sm relative overflow-hidden">
+                <div class="text-center">
+                    <span class="text-4xl block mb-2">🖼️</span>
+                    <span class="text-pink-500 font-bold text-sm">[请在此处替换您的合照/图片]</span>
+                </div>
+            </div>
+            
+            <div class="text-sm leading-relaxed text-gray-700 font-serif mb-6 flex-1">
+                <p class="mb-2 font-bold text-lg text-pink-500">亲爱的妈妈：</p>
+                <p class="mb-2">当您能点开这封信时，说明您已经成功通关了游戏！🎉</p>
+                <p class="mb-2">其实游戏里的那些挑战：做不完的家务、操不完的心... 都是您每天真实的日常。您总是把最好的一面留给我，默默承受着所有的辛劳。</p>
+                <p class="mb-2">岁月或许会让时光流逝，但在我心里，您永远是最勇敢、最美丽的超人。</p>
+                <p class="mt-8 font-bold text-pink-600 text-right text-lg">永远爱您的孩子</p>
+            </div>
+            <button onclick="closeLetter()" class="mt-auto rpg-btn py-3 px-4 font-bold text-lg w-full" style="background: linear-gradient(to bottom, #e84393, #d63031);">返回主菜单</button>
+        </div>
+
+        <!-- 成就解锁Toast提示区 -->
+        <div id="toast-container" class="absolute top-4 left-0 w-full flex flex-col items-center gap-2 z-[60] pointer-events-none"></div>
+
+    </div>
+
+    <script>
+        // --- 游戏数据与状态 ---
+        let state = {
+            hp: 100,
+            maxHp: 100,
+            joy: 100,
+            maxJoy: 100,
+            love: 0,
+            day: 0,
+            maxDays: 20,
+            relics: [] // [{id: 'thermos', name: '保温杯', emoji: '🍵', desc: '每天恢复体力'}]
+        };
+
+        // --- 本地存储与成就系统数据 ---
+        let localData = JSON.parse(localStorage.getItem('mom_rpg_data')) || {
+            achievements: [],
+            hasCleared: false
+        };
+
+        const achievementDb = [
+            { id: 'first_win', name: '初级勇者', desc: '首次通关游戏！', emoji: '👑' },
+            { id: 'love_master', name: '爱意满满', desc: '单局收集超过100点爱心', emoji: '💖' },
+            { id: 'relic_hunter', name: '神器猎人', desc: '单局收集3个以上神器', emoji: '🎒' },
+            { id: 'tough_mom', name: '极限边缘', desc: '体力或心情跌至10以下且存活', emoji: '⚠️' }
+        ];
+
+        function saveLocalData() {
+            localStorage.setItem('mom_rpg_data', JSON.stringify(localData));
+            initStartMenu(); // 刷新主菜单状态
+        }
+
+        function unlockAchievement(id) {
+            if (!localData.achievements.includes(id)) {
+                localData.achievements.push(id);
+                saveLocalData();
+                showToast(achievementDb.find(a => a.id === id));
+            }
+        }
+
+        function showToast(ach) {
+            const toast = document.createElement('div');
+            toast.className = 'bg-yellow-100 border-2 border-yellow-400 text-yellow-800 px-4 py-2 rounded-lg shadow-lg flex items-center gap-3 toast-enter';
+            toast.innerHTML = `<span class="text-2xl">${ach.emoji}</span><div><p class="font-bold text-sm">成就解锁！</p><p class="text-xs">${ach.name}</p></div>`;
+            document.getElementById('toast-container').appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        // --- 游戏内容数据库 ---
+
+        // 随机事件池 (打怪/日常)
+        const events = [
+            {
+                title: "家务巨兽出现了！", emoji: "🧺", type: "combat",
+                desc: "沙发上堆满了一座由脏衣服和乱丢的玩具组成的小山，散发着混乱的能量。",
+                choices: [
+                    { text: "亲自施展清洁魔法", cost: { hp: -15, joy: -5 }, reward: { love: 15 }, msg: "你腰酸背痛，但家里重新焕发了光彩！" },
+                    { text: "使用召唤术 (喊爸爸/孩子去干)", cost: { hp: 0, joy: -15 }, reward: { love: 5 }, msg: "他们做得有点敷衍，你看着十分闹心，但至少不用自己动手。" }
+                ]
+            },
+            {
+                title: "深夜灵魂拷问", emoji: "🤔", type: "event",
+                desc: "时钟敲响了晚上11点，一个终极问题浮现在脑海：明天早上吃什么？",
+                choices: [
+                    { text: "精心规划营养早餐", cost: { hp: -10, joy: 0 }, reward: { love: 20 }, msg: "牺牲了睡眠时间，但满满的都是母爱。" },
+                    { text: "明天路上买包子！", cost: { hp: 0, joy: +10 }, reward: { love: 0 }, msg: "放过自己，心情舒畅，早早进入了梦乡。" }
+                ]
+            },
+            {
+                title: "突发：熊孩子捣乱事件", emoji: "🧸", type: "combat",
+                desc: "你刚收拾好的客厅，瞬间被撒满了一地的积木。熊孩子正无辜地看着你。",
+                choices: [
+                    { text: "深呼吸，默念亲生的", cost: { hp: -5, joy: -20 }, reward: { love: 10 }, msg: "你忍住了怒火，展现了极高的情绪管理能力。" },
+                    { text: "耐心教导并一起收拾", cost: { hp: -20, joy: -5 }, reward: { love: 30 }, msg: "虽然很累，但趁机进行了一次完美的家庭教育！" }
+                ]
+            },
+            {
+                title: "难得的周末清晨", emoji: "☀️", type: "rest",
+                desc: "今天竟然没有人早起吵你，阳光正好洒在窗台上。",
+                choices: [
+                    { text: "继续睡个回笼觉", cost: { hp: +30, joy: +10 }, reward: { love: 0 }, msg: "体力大恢复！这才是周末该有的样子。" },
+                    { text: "早起享受独处时光", cost: { hp: +10, joy: +30 }, reward: { love: 0 }, msg: "喝杯咖啡追个剧，心情值拉满！" }
+                ]
+            },
+            {
+                title: "商场大减价！", emoji: "🛍️", type: "event",
+                desc: "路过商场，发现正在进行母亲节疯狂打折促销！",
+                choices: [
+                    { text: "果断给自己买买买", cost: { hp: -10, joy: +40 }, reward: { love: 0 }, msg: "虽然走得很累，但看到漂亮的衣服，心情好极了！" },
+                    { text: "给家里人挑点东西", cost: { hp: -15, joy: +10 }, reward: { love: 25 }, msg: "不知不觉又买了一堆家庭用品..." }
+                ]
+            },
+            {
+                title: "美好的周末午后", emoji: "🌿", type: "event",
+                desc: "难得的周末休息日，天气非常好，是时候决定怎么度过了。",
+                choices: [
+                    { text: "和家人去郊野游玩", cost: { hp: -20, joy: +30 }, reward: { love: 20 }, msg: "虽然走得很累，但拍了很多好看的照片，全家人都很开心！" },
+                    { text: "在家静静侍弄花草", cost: { hp: -5, joy: +20 }, reward: { love: 5 }, msg: "看着新长出的嫩芽，内心感到无比的平静与满足。" }
+                ]
+            },
+            {
+                title: "终于下班了！", emoji: "🌇", type: "event",
+                desc: "忙碌了一整天终于下班。闺蜜发来消息说：“三缺一，速来！”",
+                choices: [
+                    { text: "欣然赴约，快乐搓麻", cost: { hp: -15, joy: +35 }, reward: { love: 0 }, msg: "不仅赢了点小钱，还跟姐妹们狠狠吐槽了生活，心情大好！" },
+                    { text: "婉拒，回家躺平", cost: { hp: +15, joy: +15 }, reward: { love: 0 }, msg: "什么都不想干，只想在沙发上瘫着刷会儿短视频，恢复体力。" }
+                ]
+            },
+            {
+                title: "厨房的新尝试", emoji: "🍳", type: "event",
+                desc: "在网上刷到了一个看起来很好吃的网红菜谱，感觉自己又行了。",
+                choices: [
+                    { text: "大展身手，尝试复刻！", cost: { hp: -15, joy: +10 }, reward: { love: 25 }, msg: "虽然厨房像刚打过仗，但味道出乎意料的不错，收获了家人的光盘和赞美！" },
+                    { text: "算了，点个外卖吧", cost: { hp: 0, joy: +5 }, reward: { love: 0 }, msg: "懒惰战胜了探索欲，但不用洗碗的感觉真好。" }
+                ]
+            },
+            {
+                title: "追剧的诱惑", emoji: "📺", type: "event",
+                desc: "晚上好不容易把所有事情忙完，最近追的剧刚好更新了两集。",
+                choices: [
+                    { text: "熬夜连看两集！", cost: { hp: -20, joy: +25 }, reward: { love: 0 }, msg: "剧情太上头了！但是明天黑眼圈又要加重了..." },
+                    { text: "为了皮肤，准时睡觉", cost: { hp: +20, joy: -5 }, reward: { love: 0 }, msg: "虽然心里痒痒的，但良好的睡眠才是美容的终极秘诀。" }
+                ]
+            }
+        ];
+
+        // 神器池 (Roguelike元素)
+        const relicPool = [
+            { id: 'thermos', name: '枸杞保温杯', emoji: '🍵', desc: '妈妈的神器。每回合自动恢复 5 点体力。', effect: (state) => { state.hp = Math.min(state.maxHp, state.hp + 5); } },
+            { id: 'headphones', name: '降噪耳机', emoji: '🎧', desc: '屏蔽一切噪音。承受的心情(joy)伤害减少 5 点。', passive: true },
+            { id: 'massage', name: '颈椎按摩仪', emoji: '💆', desc: '有效缓解疲劳。受到的体力(hp)伤害减少 5 点。', passive: true },
+            { id: 'sweets', name: '隐藏的小蛋糕', emoji: '🍰', desc: '每回合自动恢复 3 点心情。', effect: (state) => { state.joy = Math.min(state.maxJoy, state.joy + 3); } }
+        ];
+
+        // 宝箱事件
+        const treasureEvent = {
+            title: "神秘的快递盲盒", emoji: "🎁", type: "treasure",
+            desc: "门口突然出现了一个写着“母亲节快乐”的神秘包裹，里面似乎散发着强大的神器光芒！",
+            choices: [] // 动态生成
+        };
+
+        // --- 核心逻辑 ---
+
+        const UI = {
+            hpBar: document.getElementById('ui-hp-bar'),
+            hpText: document.getElementById('ui-hp-text'),
+            joyBar: document.getElementById('ui-joy-bar'),
+            joyText: document.getElementById('ui-joy-text'),
+            love: document.getElementById('ui-love'),
+            day: document.getElementById('ui-day'),
+            relics: document.getElementById('ui-relics'),
+            mainScreen: document.getElementById('main-screen'),
+            eventEmoji: document.getElementById('event-emoji'),
+            eventTitle: document.getElementById('event-title'),
+            eventDesc: document.getElementById('event-desc'),
+            actionBtns: document.getElementById('action-buttons'),
+            overlay: document.getElementById('overlay'),
+            endEmoji: document.getElementById('end-emoji'),
+            endTitle: document.getElementById('end-title'),
+            endDesc: document.getElementById('end-desc'),
+            startScreen: document.getElementById('start-screen'),
+            btnLetter: document.getElementById('btn-letter'),
+            achievementsScreen: document.getElementById('achievements-screen'),
+            achievementsList: document.getElementById('achievements-list'),
+            letterScreen: document.getElementById('letter-screen')
+        };
+
+        // --- 主菜单与功能面板逻辑 ---
+        function initStartMenu() {
+            if (localData.hasCleared) {
+                UI.btnLetter.classList.remove('hidden');
+            }
+        }
+
+        function showAchievements() {
+            UI.achievementsList.innerHTML = '';
+            achievementDb.forEach(ach => {
+                const isUnlocked = localData.achievements.includes(ach.id);
+                const el = document.createElement('div');
+                el.className = `p-3 rounded-lg border-2 flex items-center gap-3 transition-all ${isUnlocked ? 'bg-gray-800 border-yellow-500' : 'bg-gray-800/50 border-gray-600 opacity-60'}`;
+                el.innerHTML = `
+                    <div class="text-3xl">${isUnlocked ? ach.emoji : '🔒'}</div>
+                    <div>
+                        <div class="font-bold text-gray-200">${isUnlocked ? ach.name : '未知成就'}</div>
+                        <div class="text-xs text-gray-400">${isUnlocked ? ach.desc : '达成条件后解锁'}</div>
+                    </div>
+                `;
+                UI.achievementsList.appendChild(el);
+            });
+            UI.achievementsScreen.classList.remove('hidden');
+        }
+
+        function closeAchievements() {
+            UI.achievementsScreen.classList.add('hidden');
+        }
+
+        function showLetter() {
+            UI.letterScreen.classList.remove('hidden');
+        }
+
+        function closeLetter() {
+            UI.letterScreen.classList.add('hidden');
+        }
+
+        // 页面加载时初始化
+        initStartMenu();
+
+        function startGame() {
+            UI.startScreen.classList.add('hidden');
+            state.hp = 100;
+            state.joy = 100;
+            state.love = 0;
+            state.day = 1;
+            state.relics = [];
+            updateUI();
+            nextTurn();
+        }
+
+        function updateUI() {
+            UI.hpBar.style.width = `${Math.max(0, (state.hp / state.maxHp) * 100)}%`;
+            UI.hpText.innerText = Math.floor(state.hp);
+            
+            // 颜色变化提示
+            if (state.hp < 30) UI.hpBar.className = 'bg-red-700 h-full bar-fill';
+            else UI.hpBar.className = 'bg-red-500 h-full bar-fill';
+
+            UI.joyBar.style.width = `${Math.max(0, (state.joy / state.maxJoy) * 100)}%`;
+            UI.joyText.innerText = Math.floor(state.joy);
+
+            if (state.joy < 30) UI.joyBar.className = 'bg-gray-500 h-full bar-fill';
+            else UI.joyBar.className = 'bg-blue-500 h-full bar-fill';
+
+            UI.love.innerText = state.love;
+            UI.day.innerText = state.day;
+
+            // 渲染神器
+            UI.relics.innerHTML = '<span class="text-xs text-gray-400">持有神器:</span>';
+            state.relics.forEach(r => {
+                UI.relics.innerHTML += `<span title="${r.name}: ${r.desc}" class="text-xl cursor-help">${r.emoji}</span>`;
+            });
+        }
+
+        // 飘字动画函数
+        function showFloatingText(text, color, elementId) {
+            const el = document.getElementById(elementId);
+            const rect = el.getBoundingClientRect();
+            const mainRect = document.getElementById('game-container').getBoundingClientRect();
+            
+            const floatDiv = document.createElement('div');
+            floatDiv.className = 'float-text';
+            floatDiv.innerText = text;
+            floatDiv.style.color = color;
+            floatDiv.style.left = `${rect.left - mainRect.left + 20}px`;
+            floatDiv.style.top = `${rect.top - mainRect.top - 10}px`;
+            
+            document.getElementById('game-container').appendChild(floatDiv);
+            setTimeout(() => floatDiv.remove(), 1000);
+        }
+
+        function triggerDamageShake() {
+            UI.mainScreen.classList.remove('shake');
+            void UI.mainScreen.offsetWidth; // 触发重绘
+            UI.mainScreen.classList.add('shake');
+        }
+
+        function nextTurn() {
+            // 检查游戏结束条件
+            if (state.hp <= 0 || state.joy <= 0) {
+                gameOver();
+                return;
+            }
+            if (state.day > state.maxDays) {
+                gameWin();
+                return;
+            }
+
+            // 触发回合开始的神器效果 (恢复体力/心情)
+            state.relics.forEach(relic => {
+                if (relic.effect) relic.effect(state);
+            });
+            updateUI(); // 更新恢复后的UI
+
+            // 决定生成什么事件 (每5天必定是宝箱事件)
+            let currentEvent;
+            if (state.day % 5 === 0) {
+                currentEvent = generateTreasure();
+            } else {
+                currentEvent = events[Math.floor(Math.random() * events.length)];
+            }
+
+            renderEvent(currentEvent);
+        }
+
+        function generateTreasure() {
+            // 随机挑选两个未拥有的神器供选择
+            const availableRelics = relicPool.filter(r => !state.relics.find(sr => sr.id === r.id));
+            if (availableRelics.length === 0) {
+                // 如果都有了，就回血回蓝
+                return {
+                    title: "难得的宁静", emoji: "☕", type: "rest",
+                    desc: "你已经收集了所有的神器。享受这片刻的宁静吧。",
+                    choices: [{ text: "喝杯热茶 (+30体力, +30心情)", cost: { hp: 30, joy: 30 }, reward: { love: 10 }, msg: "身心舒畅！" }]
+                };
+            }
+
+            // 打乱数组取前两个
+            availableRelics.sort(() => 0.5 - Math.random());
+            const options = availableRelics.slice(0, 2);
+            
+            let treasure = { ...treasureEvent, choices: [] };
+            options.forEach(relic => {
+                treasure.choices.push({
+                    text: `选择: ${relic.emoji} ${relic.name}`,
+                    isRelic: true,
+                    relicObj: relic,
+                    msg: `你获得了神器：${relic.name}！\n${relic.desc}`
+                });
+            });
+            return treasure;
+        }
+
+        function renderEvent(event) {
+            // 重新触发进场动画
+            UI.eventEmoji.classList.remove('event-enter');
+            void UI.eventEmoji.offsetWidth;
+            UI.eventEmoji.classList.add('event-enter');
+
+            UI.eventEmoji.innerText = event.emoji;
+            UI.eventTitle.innerText = `第 ${state.day} 天：${event.title}`;
+            UI.eventDesc.innerText = event.desc;
+            
+            UI.actionBtns.innerHTML = '';
+            
+            event.choices.forEach(choice => {
+                const btn = document.createElement('button');
+                btn.className = 'rpg-btn py-3 px-4 font-bold text-sm sm:text-base w-full text-left flex justify-between items-center';
+                btn.innerHTML = `<span>${choice.text}</span> <span class="text-xl">👉</span>`;
+                
+                btn.onclick = () => handleChoice(choice);
+                UI.actionBtns.appendChild(btn);
+            });
+        }
+
+        function handleChoice(choice) {
+            let resultMsg = choice.msg;
+
+            // 处理获取神器
+            if (choice.isRelic) {
+                state.relics.push(choice.relicObj);
+            } 
+            // 处理数值加减
+            else {
+                let hpChange = choice.cost.hp || 0;
+                let joyChange = choice.cost.joy || 0;
+                let loveChange = choice.reward.love || 0;
+
+                // 应用神器的被动减伤Buff
+                if (hpChange < 0 && state.relics.find(r => r.id === 'massage')) {
+                    hpChange = Math.min(0, hpChange + 5); // 减免5点伤害
+                }
+                if (joyChange < 0 && state.relics.find(r => r.id === 'headphones')) {
+                    joyChange = Math.min(0, joyChange + 5);
+                }
+
+                // 更新状态
+                state.hp = Math.min(state.maxHp, Math.max(0, state.hp + hpChange));
+                state.joy = Math.min(state.maxJoy, Math.max(0, state.joy + joyChange));
+                state.love += loveChange;
+
+                // 飘字反馈和动画
+                if (hpChange < 0) {
+                    showFloatingText(hpChange, '#ff6b81', 'ui-hp-bar');
+                    triggerDamageShake();
+                } else if (hpChange > 0) {
+                    showFloatingText(`+${hpChange}`, '#7bed9f', 'ui-hp-bar');
+                }
+
+                if (joyChange < 0) {
+                    showFloatingText(joyChange, '#70a1ff', 'ui-joy-bar');
+                    if(hpChange >= 0) triggerDamageShake(); // 如果没扣血只扣蓝也震动
+                } else if (joyChange > 0) {
+                    showFloatingText(`+${joyChange}`, '#7bed9f', 'ui-joy-bar');
+                }
+
+                if (loveChange > 0) {
+                    setTimeout(() => showFloatingText(`+${loveChange}❤`, '#ff9ff3', 'ui-love'), 300);
+                }
+            }
+
+            // 成就检查逻辑
+            if (state.relics.length >= 3) unlockAchievement('relic_hunter');
+            if ((state.hp <= 10 && state.hp > 0) || (state.joy <= 10 && state.joy > 0)) unlockAchievement('tough_mom');
+            if (state.love >= 100) unlockAchievement('love_master');
+
+            updateUI();
+
+            // 切换到结果确认界面
+            UI.eventEmoji.innerText = "✨";
+            UI.eventTitle.innerText = "行动结果";
+            UI.eventDesc.innerText = resultMsg;
+            UI.actionBtns.innerHTML = '';
+            
+            const nextBtn = document.createElement('button');
+            nextBtn.className = 'rpg-btn py-3 px-4 font-bold text-lg w-full bg-green-600';
+            nextBtn.innerText = "进入下一天";
+            nextBtn.onclick = () => {
+                state.day++;
+                nextTurn();
+            };
+            UI.actionBtns.appendChild(nextBtn);
+        }
+
+        function gameOver() {
+            UI.overlay.classList.remove('hidden');
+            UI.endEmoji.innerText = "🔋";
+            UI.endTitle.innerText = "妈妈电量耗尽啦！";
+            UI.endTitle.className = "text-3xl font-bold text-gray-300 mb-4 text-center";
+            UI.endDesc.innerHTML = `
+                <p class="mb-2 text-xl">坚持到了第 <span class="text-yellow-400 font-bold">${state.day}</span> 天</p>
+                <p class="mb-4">共收集爱心：<span class="text-pink-400 font-bold">${state.love}</span></p>
+                <p class="text-sm text-gray-400">生活不是打仗，别硬撑着。放下家务，今天请好好休息一下吧！</p>
+            `;
+        }
+
+        function gameWin() {
+            // 通关解锁成就并保存记录
+            unlockAchievement('first_win');
+            if (!localData.hasCleared) {
+                localData.hasCleared = true;
+                saveLocalData();
+            }
+
+            UI.overlay.classList.remove('hidden');
+            UI.endEmoji.innerText = "👑";
+            UI.endTitle.innerText = "通关！最强勇者妈妈";
+            UI.endTitle.className = "text-3xl font-bold text-yellow-400 mb-4 text-center drop-shadow-md";
+            
+            let evaluation = "";
+            if(state.love > 150) evaluation = "【传说级通关】您的爱已经溢出屏幕了！";
+            else if(state.love > 100) evaluation = "【史诗级通关】兼顾了身心健康和家庭，太强了！";
+            else evaluation = "【优秀通关】平平淡淡才是真，平安就好。";
+
+            UI.endDesc.innerHTML = `
+                <p class="mb-4 text-xl text-pink-300 font-bold">${evaluation}</p>
+                <p class="mb-2">最终获得爱心：<span class="text-pink-400 font-bold text-2xl">${state.love}</span></p>
+                <div class="mt-6 text-left text-sm text-gray-200 bg-gray-800 p-4 rounded-lg border border-gray-600 shadow-inner">
+                    <p class="text-center text-yellow-400 font-bold mb-2">🎉 恭喜解锁专属信件！</p>
+                    <p class="text-center">返回主菜单即可随时查看您的专属来信哦。</p>
+                </div>
+            `;
+            
+            // 修改重玩按钮逻辑，使其返回主菜单
+            const restartBtn = UI.overlay.querySelector('button');
+            restartBtn.innerText = "返回主菜单";
+            restartBtn.onclick = () => location.reload();
+        }
+
+    </script>
+</body>
+</html>
