@@ -93,6 +93,18 @@
 
         /* 轮播图渐变动画 */
         .fade-img { transition: opacity 0.5s ease-in-out; }
+
+        /* 留言板气泡 */
+        .msg-bubble { 
+            background: #fff0f5; 
+            border: 1px solid #ffb6c1; 
+            border-radius: 8px; 
+            padding: 8px; 
+            margin-bottom: 8px; 
+            font-size: 0.9rem;
+            color: #4a4a4a;
+            word-break: break-all;
+        }
     </style>
 </head>
 <body class="h-screen w-screen flex items-center justify-center p-2 sm:p-4">
@@ -198,6 +210,36 @@
                 <p class="mb-2">岁月或许会让时光流逝，但在我心里，您永远是最勇敢、最美丽的超人。</p>
                 <p class="mt-8 font-bold text-pink-600 text-right text-lg">永远爱您的孩子</p>
             </div>
+
+            <!-- [新增] 留言板与表情区域 -->
+            <!-- 修改1：将外层容器的 flex-1 改为 flex-none，防止它为了适应屏幕而被压缩 -->
+            <div class="mt-4 border-t-2 border-pink-200 pt-4 flex-none flex flex-col">
+                <h3 class="text-md font-bold text-pink-500 mb-2">留下想说的话 / 贴表情：</h3>
+                
+                <!-- 留言展示区 -->
+                <!-- 修改2：去掉了 flex-1，增加了 min-h-[120px] 强制保证至少有120像素的高度 -->
+                <div id="message-board" class="min-h-[120px] max-h-[200px] overflow-y-auto mb-3 p-3 bg-white rounded-lg border border-pink-200 shadow-inner">
+                    <!-- 留言列表将动态生成在这里 -->
+                </div>
+                
+                <!-- 快捷表情 -->
+                <div class="flex justify-around mb-3">
+                    <button type="button" onclick="addEmojiMsg('💖')" class="text-2xl hover:scale-110 active:scale-95 transition-transform">💖</button>
+                    <button type="button" onclick="addEmojiMsg('💐')" class="text-2xl hover:scale-110 active:scale-95 transition-transform">💐</button>
+                    <button type="button" onclick="addEmojiMsg('👩‍👧')" class="text-2xl hover:scale-110 active:scale-95 transition-transform">👩‍👧</button>
+                    <button type="button" onclick="addEmojiMsg('✨')" class="text-2xl hover:scale-110 active:scale-95 transition-transform">✨</button>
+                    <button type="button" onclick="addEmojiMsg('🎂')" class="text-2xl hover:scale-110 active:scale-95 transition-transform">🎂</button>
+                </div>
+                
+                <!-- 输入框 -->
+                <div class="flex gap-2">
+                    <input type="text" id="msg-input" class="flex-1 border-2 border-pink-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-pink-400" placeholder="写点什么...">
+                    <button onclick="submitMessage()" class="bg-pink-400 text-white px-5 py-2 rounded-lg font-bold text-sm hover:bg-pink-500 active:bg-pink-600 shadow-sm">发送</button>
+                </div>
+            </div>
+
+            <button onclick="closeLetter()" class="mt-4 rpg-btn py-3 px-4 font-bold text-lg w-full flex-none" style="background: linear-gradient(to bottom, #e84393, #d63031);">返回主菜单</button>
+        </div>
             <button onclick="closeLetter()" class="mt-auto rpg-btn py-3 px-4 font-bold text-lg w-full" style="background: linear-gradient(to bottom, #e84393, #d63031);">返回主菜单</button>
         </div>
 
@@ -410,10 +452,57 @@
         let letterCarouselIdx = 0;
         let letterCarouselInterval = null;
 
+        // [新增] 留言板功能系列函数
+        function renderMessages() {
+            const board = document.getElementById('message-board');
+            if(!board) return;
+            board.innerHTML = '';
+            
+            if (!localData.messages || localData.messages.length === 0) {
+                board.innerHTML = '<div class="text-gray-400 text-center mt-4 text-sm">还没有留言，快来贴个表情吧！</div>';
+                return;
+            }
+
+            localData.messages.forEach(msg => {
+                board.innerHTML += `<div class="msg-bubble">${msg}</div>`;
+            });
+            // 自动滚动到最底部
+            board.scrollTop = board.scrollHeight;
+        }
+
+        function submitMessage() {
+            const input = document.getElementById('msg-input');
+            const text = input.value.trim();
+            if (text) {
+                saveMessage(text);
+                input.value = ''; // 清空输入框
+            }
+        }
+
+        function addEmojiMsg(emoji) {
+            saveMessage(emoji);
+        }
+
+        function saveMessage(content) {
+            if (!localData.messages) localData.messages = [];
+            
+            // 获取当前时间戳字符串
+            const now = new Date();
+            const timeStr = `${now.getMonth() + 1}/${now.getDate()} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+            
+            // 组合并保存
+            localData.messages.push(`<span class="text-xs text-pink-300 font-bold mr-1">[${timeStr}]</span> ${content}`);
+            saveLocalData();
+            renderMessages();
+            
+            // 触发留言成就
+            // unlockAchievement('leave_message');
+        }
+
         // [替换] 修改原有的 showLetter 函数
         function showLetter() {
             UI.letterScreen.classList.remove('hidden');
-            // renderMessages(); // 打开信件时刷新留言
+            renderMessages(); // 打开信件时刷新留言
             
             // 启动信件照片轮播
             const imgEl = document.getElementById('letter-carousel-img');
